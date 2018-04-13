@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>RSS Example</title>
+    <link>http://example.com/</link>
+    <description>Test Sitemap Parser for RSS Feeds</description>
+    <language>EN</language>
+    <lastBuildDate>Thu, 17 Nov 2016 20:23:31 +0000</lastBuildDate>
+    <copyright>(C) example.com</copyright>
+    <item>
+      <title>Coffee time: milk or not?</title>
+      <link>http://example.com/coffee-time/</link>
+      <description>Want to have a coffee? Lisa's caf&eacute; is open Monday through Saturday from 7 a.m. to 5 p.m.</description>
+      <pubDate>Wed, 13 Nov 2016 20:43:42 +0000</pubDate>
+    </item>
+    <item>
+      <title>Tea time: black or green?</title>
+      <link>http://example.com/tea-time/</link>
+      <description>Want to have a tea? Peter & Mary&lsquo; tea house is open Monday through Saturday from 10 a.m. to 5 p.m., and until 7 p.m. on Thursdays.</description>
+      <pubDate>Thu, Nov 17 2016 14:06:28 +0000</pubDate>
+    </item>
+  </channel>
+</rss>
