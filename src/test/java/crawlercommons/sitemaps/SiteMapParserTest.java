@@ -555,12 +555,13 @@ public class SiteMapParserTest {
         baseUrl = "https://example.com/index.php?route=path/sitemap";
         sitemap = new SiteMap(baseUrl);
         assertTrue(SiteMapParser.urlIsValid(sitemap.getBaseUrl(), testUrl));
+    }
 
     @Test
     public void testUndeclaredEntityRSS() throws UnknownFormatException, IOException {
         SiteMapParser parser = new SiteMapParser();
         byte[] content = getResourceAsBytes("src/test/resources/rss/feed2.rss");
-        URL url = new URL("http://www.example.com/feed.rss");
+        URL url = new URL("http://example.com/feed.rss");
 
         SiteMap sm = (SiteMap) parser.parseSiteMap(content, url);
         assertEquals(2, sm.getSiteMapUrls().size());
@@ -570,7 +571,7 @@ public class SiteMapParserTest {
     public void testBareAmpersandAtom() throws UnknownFormatException, IOException {
         SiteMapParser parser = new SiteMapParser();
         byte[] content = getResourceAsBytes("src/test/resources/rss/atom.php");
-        URL url = new URL("http://www.example.com/atom.php");
+        URL url = new URL("http://example.com/atom.php");
 
         SiteMap sm = (SiteMap) parser.parseSiteMap(content, url);
         assertEquals(2, sm.getSiteMapUrls().size());

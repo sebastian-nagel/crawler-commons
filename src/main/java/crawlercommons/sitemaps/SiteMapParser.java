@@ -24,7 +24,9 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.StringReader;
+import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
@@ -34,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.zip.GZIPInputStream;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -47,6 +50,8 @@ import org.slf4j.LoggerFactory;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+
+import com.rometools.rome.io.impl.XmlFixerReader;
 
 import crawlercommons.mimetypes.MimeTypeDetector;
 import crawlercommons.sitemaps.AbstractSiteMap.SitemapType;
@@ -189,6 +194,8 @@ public class SiteMapParser {
             }
         }
     }
+
+    private boolean xmlParserRetryFixedXml = true;
 
     /**
      * Returns a SiteMap or SiteMapIndex given an online sitemap URL
@@ -408,11 +415,19 @@ public class SiteMapParser {
      */
     protected AbstractSiteMap processXml(URL sitemapUrl, byte[] xmlContent) throws UnknownFormatException {
 
-        BOMInputStream bomIs = new BOMInputStream(new ByteArrayInputStream(xmlContent));
-        InputSource is = new InputSource();
-        is.setCharacterStream(new BufferedReader(new InputStreamReader(bomIs, UTF_8)));
+        Function<Boolean, InputSource> getInputSource = (Boolean fixup) -> {
+            BOMInputStream bomIs = new BOMInputStream(new ByteArrayInputStream(xmlContent));
+            InputSource is = new InputSource();
+            Reader ir = new BufferedReader(new InputStreamReader(bomIs, UTF_8));
+            if (fixup) {
+                is.setCharacterStream(new XmlFixerReader(ir));
+            } else {
+                is.setCharacterStream(ir);
+            }
+            return is;
+        };
 
-        return processXml(sitemapUrl, is);
+        return processXml(sitemapUrl, getInputSource, xmlParserRetryFixedXml);
     }
 
     /**
@@ -496,16 +511,32 @@ public class SiteMapParser {
 
         LOG.debug("Processing gzipped XML");
 
-        InputStream is = new ByteArrayInputStream(response);
+        Function<Boolean, InputSource> getInputSource = (Boolean fixup) -> {
+            InputStream is = new ByteArrayInputStream(response);
 
-        // Remove .gz ending
-        String xmlUrl = url.toString().replaceFirst("\\.gz$", "");
-        LOG.debug("XML url = {}", xmlUrl);
+            // Remove .gz ending
+            String xmlUrl = url.toString().replaceFirst("\\.gz$", "");
+            LOG.debug("XML url = {}", xmlUrl);
 
-        BOMInputStream decompressed = new BOMInputStream(new GZIPInputStream(is));
-        InputSource in = new InputSource(decompressed);
-        in.setSystemId(xmlUrl);
-        return processXml(url, in);
+            BOMInputStream decompressed;
+            try {
+                decompressed = new BOMInputStream(new GZIPInputStream(is));
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            InputSource in = new InputSource();
+            in.setSystemId(xmlUrl);
+            Reader ir = new BufferedReader(new InputStreamReader(decompressed, UTF_8));
+            if (fixup) {
+                in.setCharacterStream(new XmlFixerReader(ir));
+            } else {
+                in.setCharacterStream(ir);
+            }
+
+            return in;
+        };
+
+        return processXml(url, getInputSource, xmlParserRetryFixedXml);
     }
 
     /**
@@ -521,6 +552,13 @@ public class SiteMapParser {
      *             {@link org.xml.sax.InputSource}
      */
     protected AbstractSiteMap processXml(URL sitemapUrl, InputSource is) throws UnknownFormatException {
+        Function<Boolean, InputSource> getInputSource = (Boolean fixup) -> {
+            return is;
+        };
+        return processXml(sitemapUrl, getInputSource, false);
+    }
+
+    private AbstractSiteMap processXml(URL sitemapUrl, Function<Boolean, InputSource> isSupplier, boolean retryFixXml) throws UnknownFormatException {
 
         SAXParserFactory factory = SAXParserFactory.newInstance();
 
@@ -538,12 +576,7 @@ public class SiteMapParser {
             throw new RuntimeException("Failed to configure XML parser: " + e.toString());
         }
 
-        DelegatorHandler handler = new DelegatorHandler(sitemapUrl, strict);
-        handler.setStrictNamespace(isStrictNamespace());
-        if (isStrictNamespace()) {
-            handler.setAcceptedNamespaces(acceptedNamespaces);
-        }
-        handler.setExtensionNamespaces(extensionNamespaces);
+        DelegatorHandler handler = getHandler(sitemapUrl, strict);
 
         try {
             SAXParser saxParser = factory.newSAXParser();
@@ -554,7 +587,24 @@ public class SiteMapParser {
                     return new InputSource(new StringReader(""));
                 }
             });
-            saxParser.parse(is, handler);
+            if (retryFixXml) {
+                try {
+                    saxParser.parse(isSupplier.apply(false), handler);
+                } catch (SAXException e) {
+                    LOG.warn("Error parsing sitemap {}: {}", sitemapUrl, e.getMessage());
+                    LOG.info("Retrying...");
+                    try {
+                        InputSource is = isSupplier.apply(true);
+                        is.setCharacterStream(new XmlFixerReader(is.getCharacterStream()));
+                        DelegatorHandler handlerRetry = getHandler(sitemapUrl, strict);
+                        saxParser.parse(is, handlerRetry);
+                        handler = handlerRetry;
+                    } catch (Exception eRetry) {
+                        LOG.warn("Retry failed with: {}", eRetry.getMessage());
+                        throw e;
+                    }
+                }
+            }
             AbstractSiteMap sitemap = handler.getSiteMap();
             if (sitemap == null) {
                 UnknownFormatException ex = handler.getException();
@@ -564,7 +614,7 @@ public class SiteMapParser {
                 throw new UnknownFormatException("Unknown XML format for: " + sitemapUrl);
             }
             return sitemap;
-        } catch (IOException e) {
+        } catch (IOException | UncheckedIOException e) {
             LOG.warn("Error parsing sitemap {}: {}", sitemapUrl, e.getMessage());
             UnknownFormatException ufe = new UnknownFormatException("Failed to parse " + sitemapUrl);
             ufe.initCause(e);
@@ -584,6 +634,16 @@ public class SiteMapParser {
         } catch (ParserConfigurationException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private DelegatorHandler getHandler(URL sitemapUrl, boolean strict) {
+        DelegatorHandler handler = new DelegatorHandler(sitemapUrl, strict);
+        handler.setStrictNamespace(isStrictNamespace());
+        if (isStrictNamespace()) {
+            handler.setAcceptedNamespaces(acceptedNamespaces);
+        }
+        handler.setExtensionNamespaces(extensionNamespaces);
+        return handler;
     }
 
     /**
