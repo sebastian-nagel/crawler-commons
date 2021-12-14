@@ -287,27 +287,28 @@ public class SimpleRobotRulesParserTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "False, http://www.domain.com/a",//
-                    "False, http://www.domain.com/a/",//
-                    "False, http://www.domain.com/a/bloh/foo.html",//
-                    "True, http://www.domain.com/b",//
-                    "False, http://www.domain.com/b/a",//
-                    "False, http://www.domain.com/b/a/index.html",//
-                    "True, http://www.domain.com/b/b/foo.html",//
-                    "True, http://www.domain.com/c",//
-                    "True, http://www.domain.com/c/a",//
-                    "True, http://www.domain.com/c/a/index.html",//
-                    "True, http://www.domain.com/c/b/foo.html",//
-                    "True, http://www.domain.com/d",//
-                    "True, http://www.domain.com/d/a",//
-                    "True, http://www.domain.com/e/a/index.html",//
-                    "True, http://www.domain.com/e/d",//
-                    "True, http://www.domain.com/e/d/foo.html",//
-                    "True, http://www.domain.com/e/doh.html",//
-                    "True, http://www.domain.com/f/index.html",//
-                    "True, http://www.domain.com/foo/bar/baz.html",//
-                    "True, http://www.domain.com/f/" })
-    void testNutchCases(boolean isAllowed, String urlStr) {
+    @CsvSource({
+            "False, False, http://www.domain.com/a",//
+                    "False, False, http://www.domain.com/a/",//
+                    "False, False, http://www.domain.com/a/bloh/foo.html",//
+                    "True, True, http://www.domain.com/b",//
+                    "False, False, http://www.domain.com/b/a",//
+                    "False, False, http://www.domain.com/b/a/index.html",//
+                    "True, True, http://www.domain.com/b/b/foo.html",//
+                    "True, True, http://www.domain.com/c",//
+                    "True, True, http://www.domain.com/c/a",//
+                    "True, True, http://www.domain.com/c/a/index.html",//
+                    "True, True, http://www.domain.com/c/b/foo.html",//
+                    "True, False, http://www.domain.com/d",//
+                    "True, False, http://www.domain.com/d/a",//
+                    "True, True, http://www.domain.com/e/a/index.html",//
+                    "True, True, http://www.domain.com/e/d",//
+                    "True, False, http://www.domain.com/e/d/foo.html",//
+                    "True, True, http://www.domain.com/e/doh.html",//
+                    "True, True, http://www.domain.com/f/index.html",//
+                    "True, False, http://www.domain.com/foo/bar/baz.html",//
+                    "True, True, http://www.domain.com/f/" })
+    void testNutchCases(boolean isAllowed, boolean isMergeAllowed, String urlStr) {
         // Run through the Nutch test cases.
         final String nutchRobotsTxt = "User-Agent: Agent1 #foo" + CR + "Disallow: /a" + CR + "Disallow: /b/a" + CR + "#Disallow: /c" + CR + "" + CR + "" + CR + "User-Agent: Agent2 Agent3#foo" + CR
                         + "User-Agent: Agent4" + CR + "Disallow: /d" + CR + "Disallow: /e/d/" + CR + "" + CR + "User-Agent: *" + CR + "Disallow: /foo/bar/" + CR;
@@ -317,11 +318,11 @@ public class SimpleRobotRulesParserTest {
         rules = createRobotRules("Agent1", nutchRobotsTxt);
         assertEquals(isAllowed, rules.isAllowed(urlStr));
 
-        // Note that the SimpleRobotRulesParser only parses the rule set of the
-        // first matching agent name. For the following example, the parser
-        // returns only the rules matching 'Agent1'.
+
+
+        // Note that SimpleRobotRulesParser now merges all matching user agent rules.
         rules = createRobotRules("Agent5,Agent2,Agent1,Agent3,*", nutchRobotsTxt);
-        assertEquals(isAllowed, rules.isAllowed(urlStr));
+        assertEquals(isMergeAllowed, rules.isAllowed(urlStr));
     }
 
     @ParameterizedTest
@@ -711,6 +712,30 @@ public class SimpleRobotRulesParserTest {
         rules = createRobotRules("mysuperlongbotnamethatmatchesnothing", readFile("/robots/many-user-agents.txt"));
         assertTrue(rules.isAllowed("http://domain.com/"), "many-user-agents");
         assertFalse(rules.isAllowed("http://domain.com/bot-trap/"), "many-user-agents");
+    }
+
+    @Test
+    void testManyUserAgentsMergeRules() throws Exception {
+        BaseRobotRules rules = createRobotRules("wget", readFile("/robots/merge-rules.txt"));
+        assertTrue(rules.isAllowed("http://domain.com/foo/bar/bar.txt"), "merge-rules");
+        assertFalse(rules.isAllowed("http://domain.com/tmp/bar/bar.txt"), "merge-rules");
+        assertTrue(rules.isAllowed("http://domain.com/chk/bar/bar.txt"), "merge-rules");
+    }
+
+    @Test
+    void testConflictingRules() throws Exception {
+        BaseRobotRules rules = createRobotRules("wget", readFile("/robots/conflicting-rules.txt"));
+
+        assertTrue(rules.isAllowed("http://domain.com/"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/foo/bar"), "conflicting-rules");
+
+        rules = createRobotRules("testy", readFile("/robots/conflicting-rules.txt"));
+
+        assertTrue(rules.isAllowed("http://domain.com/"), "conflicting-rules");
+        assertTrue(rules.isAllowed("http://domain.com/foo/bar"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/foo/blue"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/foo/"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/foo/tar"), "conflicting-rules");
     }
 
     @Test
