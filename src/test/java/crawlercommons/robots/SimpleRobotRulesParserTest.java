@@ -736,6 +736,18 @@ public class SimpleRobotRulesParserTest {
         assertFalse(rules.isAllowed("http://domain.com/foo/blue"), "conflicting-rules");
         assertFalse(rules.isAllowed("http://domain.com/foo/"), "conflicting-rules");
         assertFalse(rules.isAllowed("http://domain.com/foo/tar"), "conflicting-rules");
+
+        // test example in https://datatracker.ietf.org/doc/html/draft-koster-rep-06#section-3.2
+        rules = createRobotRules("foobot", readFile("/robots/conflicting-rules.txt"));
+        assertTrue(rules.isAllowed("http://domain.com/example/page/"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/example/page/disallowed.gif"), "conflicting-rules");
+
+        rules = createRobotRules("barbot", readFile("/robots/conflicting-rules.txt"));
+        assertTrue(rules.isAllowed("http://domain.com/example/page/"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/example/page/disallowed.gif"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/this/path/is/disallowed/"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/this/path/is/disallowed/index.html"), "conflicting-rules");
+        assertFalse(rules.isAllowed("http://domain.com/this/path/is/disallowed/doc.pdf"), "conflicting-rules");
     }
 
     @Test

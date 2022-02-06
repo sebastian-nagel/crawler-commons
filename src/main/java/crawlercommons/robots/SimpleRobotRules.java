@@ -289,7 +289,7 @@ public class SimpleRobotRules extends BaseRobotRules {
         // consumed, and either we consumed all the text or we didn't have to
         // match it all (no '$' at end of the pattern)
         if ((patternPos == patternEnd) && ((textPos == textEnd) || !containsEndChar)) {
-            return textPos;
+            return patternPos;
         } else {
             return -1;
         }

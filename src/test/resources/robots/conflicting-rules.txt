@@ -13,4 +13,13 @@ Allow: /foo/bar
 Disallow: /foo/b*
 
 
+# example from https://datatracker.ietf.org/doc/html/draft-koster-rep-06#section-3.2
+User-Agent : foobot
+Allow : /example/page/
+Disallow : /example/page/disallowed.gif
 
+User-Agent: barbot
+Allow: /
+Allow: *.html
+Disallow: *.gif
+Disallow : /this/path/is/disallowed/
