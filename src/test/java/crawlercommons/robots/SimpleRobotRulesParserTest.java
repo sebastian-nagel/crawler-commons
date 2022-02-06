@@ -797,6 +797,25 @@ public class SimpleRobotRulesParserTest {
         assertTrue(rules.isAllowed("http://www.fict.com/fish"));
     }
 
+    @Test
+    void testMatchingOfUserAgentNames() {
+        String robotsTxtBlock1 = "User-agent: crawlerling\n" //
+                        + "Disallow: /foo/bar\n";
+        String robotsTxtBlock2 = "User-agent: crawler\n" //
+                        + "Allow: /foo/bar\n";
+        
+        String robotsTxt = robotsTxtBlock1 + "\n" + robotsTxtBlock2;
+        BaseRobotRules rules = createRobotRules("crawlerling", robotsTxt);
+        assertFalse(rules.isAllowed("http://example.com/foo/bar"));
+        rules = createRobotRules("crawler", robotsTxt);
+        assertTrue(rules.isAllowed("http://example.com/foo/bar"));
+
+        robotsTxt = robotsTxtBlock2 + "\n" + robotsTxtBlock1;
+        rules = createRobotRules("crawlerling", robotsTxt);
+        rules = createRobotRules("crawler", robotsTxt);
+        assertTrue(rules.isAllowed("http://example.com/foo/bar"));
+    }
+
     // https://github.com/crawler-commons/crawler-commons/issues/112
     @Test
     void testSitemapAtEndOfFile() {
